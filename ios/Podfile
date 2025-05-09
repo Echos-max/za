@@ -62,3 +62,14 @@ target 'JuZi' do
     end
   end
 end
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0' # 最低设置为12.0
+      # 可选：针对特定需要低版本的库单独设置
+      # if target.name == 'SomeOldLibrary'
+      #   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '11.0'
+      # end
+    end
+  end
+end
