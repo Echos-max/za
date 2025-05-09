@@ -1,39 +1,37 @@
 workflows:
-  ju-zi-ios:
-    name: JuZi iOS Production
+  ios-workflow:
+    name: iOS Production Build
     environment:
       groups:
-        - ios_certs # 包含证书的组
+        - ios_certificates
       vars:
-        APP_ID: com.company.juzi
-        XCODE_SCHEME: "JuZi"
-        XCODE_WORKSPACE: "ios/JuZi.xcworkspace"
+        RUBY_VERSION: "3.3.0"
     scripts:
-      - name: Set up Ruby
+      - name: Install Ruby Dependencies
         script: |
-          sudo gem install cocoapods
-
-      - name: Install Pods
+          brew install openssl@1.1 readline libyaml libffi
+          
+      - name: Setup Ruby
         script: |
-          cd ios
-          pod install --repo-update
+          git clone https://github.com/rbenv/rbenv.git ~/.rbenv
+          echo 'export PATH="$HOME/.rbenv/bin:$PATH"' >> ~/.bash_profile
+          echo 'eval "$(rbenv init -)"' >> ~/.bash_profile
+          source ~/.bash_profile
+          
+          git clone https://github.com/rbenv/ruby-build.git ~/.rbenv/plugins/ruby-build
+          
+          # 安装指定版本Ruby
+          RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(brew --prefix openssl@1.1)" \
+          rbenv install $RUBY_VERSION
+          rbenv global $RUBY_VERSION
+          
+          # 验证环境
+          which ruby
+          ruby -v
+          gem env
 
-      - name: Build IPA
+      - name: Install Cocoapods
         script: |
-          cd ios
-          xcodebuild clean archive \
-          -workspace "$XCODE_WORKSPACE" \
-          -scheme "$XCODE_SCHEME" \
-          -archivePath ../build/JuZi.xcarchive \
-          -destination 'generic/platform=iOS' \
-          CODE_SIGN_STYLE="Manual" \
-          PROVISIONING_PROFILE_SPECIFIER="$IOS_PROVISIONING_PROFILE" \
-          DEVELOPMENT_TEAM="$IOS_DEVELOPMENT_TEAM" \
-          PRODUCT_BUNDLE_IDENTIFIER="$APP_ID"
-
-          xcodebuild -exportArchive \
-          -archivePath ../build/JuZi.xcarchive \
-          -exportOptionsPlist ExportOptions.plist \
-          -exportPath ../build/artifacts
-    artifacts:
-      - build/artifacts/**/*.ipa
+          gem install --user-install cocoapods -v 1.15.2
+          export PATH="$HOME/.gem/ruby/${RUBY_VERSION}/bin:$PATH"
+          pod --version
