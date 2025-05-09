@@ -160,21 +160,4 @@ workflows:
     publishing:
       email:
         recipients:
-          - dev-team@yourcompany.com
-
-# ========== 使用说明 ==========
-# 1. 需提前准备：
-#    - Codemagic后台配置包含以下变量的环境组：
-#      * IOS_PROVISIONING_PROFILE: 描述文件名称
-#      * IOS_DEVELOPMENT_TEAM: 开发者团队ID
-#    - 项目根目录需包含正确的ExportOptions.plist文件
-
-# 2. 推荐配置缓存路径：
-#    - ~/.rbenv
-#    - ~/.gem
-#    - ios/Pods
-
-# 3. 适配检查点：
-#    - 确认Scheme名称与Xcode工程一致
-#    - 检查ExportOptions.plist签名配置
-#    - 验证Ruby版本与Cocoapods兼容性
+          - dev-team@1876122538@qq.com
