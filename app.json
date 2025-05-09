@@ -1,0 +1,95 @@
+{
+  "expo": {
+    "name": "JuZi",
+    "slug": "juzi",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/images/logo.png",
+    "scheme": "juzi",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "entryPoint": "./node_modules/expo/AppEntry.js",
+    "ios": {
+      "simulator": false,
+       "credentialsSource": "manual",
+      "supportsTablet": true,
+      "env": {
+        "EXPO_NO_CERTIFICATE_MANAGER": "1"
+      },
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "需要麦克风权限以支持视频中的音频播放",
+        "UIBackgroundModes": [
+          "audio",
+          "audio"
+        ],
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight",
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.yourdomain.juzi"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.yourdomain.juzi",
+      "versionCode": 1,
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.INTERNET",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.VIBRATE"
+      ],
+      "softwareKeyboardLayoutMode": "pan",
+      "allowScreenCapture": true,
+      "screenOrientation": "default"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/logo.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/logo.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "DEFAULT"
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "需要麦克风权限以支持音频功能"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6b4c56fd-f3fd-4a2d-8d02-50f07b9bbe03"
+      }
+    },
+    "owner": "nanbu"
+  }
+}
