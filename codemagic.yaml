@@ -1,132 +1,180 @@
 workflows:
-  react-native-ios:
-    name: iOS Production Build
+  react-native-ios-prod:
+    name: iOS Production Pipeline
     instance_type: mac_mini_m1
     environment:
       groups:
-        - ios_certificates_group  # 需要在Codemagic后台配置证书和描述文件
+        - ios_certificates  # 需在Codemagic后台配置证书组
       vars:
-        APP_ID: "00008110-0004513A3686201E"  # 替换为实际Bundle ID
-        SCHEME_NAME: "JuZi"  # 替换为实际Scheme名称
-        RUBY_VERSION: "3.2.2"
+        APP_ID: "00008110-0004513A3686201E"  # 替换实际Bundle ID
+        SCHEME_NAME: "JuZi"       # 替换实际Scheme名称
+        RUBY_VERSION: "3.3.0"
         COCOAPODS_VERSION: "1.15.2"
     scripts:
-      # ================= 环境准备阶段 =================
-      - name: Configure Environment
+      # ========== 环境初始化阶段 ==========
+      - name: Initialize Environment
         script: |
-          # 禁用Homebrew干扰项
-          export HOMEBREW_NO_INSTALL_CLEANUP=1
-          export HOMEBREW_NO_ENV_HINTS=1
-          echo "✅ 已禁用Homebrew干扰设置"
+          # 清理残留文件
+          rm -rf ~/.rbenv
+          rm -rf ~/.gem
+          brew cleanup --prune=all
+          
+          # 配置基础路径
+          export HOMEBREW_PREFIX="/opt/homebrew"
+          export PATH="$HOMEBREW_PREFIX/bin:$PATH"
+          echo "export PATH='$HOMEBREW_PREFIX/bin:$PATH'" >> ~/.zshrc
 
-      # ================= 依赖安装阶段 =================
+      # ========== 依赖安装阶段 ==========
       - name: Install System Dependencies
         script: |
-          # 安装必需的系统库
-          brew install openssl@1.1 readline libyaml libffi
-          
-          # 设置动态库路径（兼容M1和Intel芯片）
-          echo "export LDFLAGS=\"-L/opt/homebrew/opt/libffi/lib -L$(brew --prefix openssl@1.1)/lib \$LDFLAGS\"" >> ~/.zshrc
-          echo "export CPPFLAGS=\"-I/opt/homebrew/opt/libffi/include -I$(brew --prefix openssl@1.1)/include \$CPPFLAGS\"" >> ~/.zshrc
-          source ~/.zshrc
-          
-          echo "🔧 系统依赖安装完成"
+          # 安装核心依赖（使用Apple Silicon原生编译）
+          arch -arm64 brew update-reset
+          arch -arm64 brew install \
+            openssl@3 \
+            readline \
+            libyaml \
+            libffi \
+            autoconf \
+            bison
 
-      # ================= Ruby环境配置 =================
-      - name: Setup Ruby Environment
+          # 配置动态库路径
+          echo "export LDFLAGS='-L$HOMEBREW_PREFIX/opt/libffi/lib -L$HOMEBREW_PREFIX/opt/openssl@3/lib'" >> ~/.zshrc
+          echo "export CPPFLAGS='-I$HOMEBREW_PREFIX/opt/libffi/include -I$HOMEBREW_PREFIX/opt/openssl@3/include'" >> ~/.zshrc
+          echo "export PKG_CONFIG_PATH='$HOMEBREW_PREFIX/opt/libffi/lib/pkgconfig:$HOMEBREW_PREFIX/opt/openssl@3/lib/pkgconfig'" >> ~/.zshrc
+          source ~/.zshrc
+
+      # ========== Ruby环境配置 ==========
+      - name: Setup Ruby
         script: |
-          # 安装rbenv
-          git clone https://github.com/rbenv/rbenv.git ~/.rbenv
+          # 安装rbenv（强制覆盖）
+          git clone https://github.com/rbenv/rbenv.git ~/.rbenv --depth 1 || (cd ~/.rbenv && git pull)
           echo 'export PATH="$HOME/.rbenv/bin:$PATH"' >> ~/.zshrc
           echo 'eval "$(rbenv init -)"' >> ~/.zshrc
           source ~/.zshrc
-          
-          # 安装ruby-build插件
-          mkdir -p ~/.rbenv/plugins
-          git clone https://github.com/rbenv/ruby-build.git ~/.rbenv/plugins/ruby-build
-          
-          # 配置编译参数
-          export RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(brew --prefix openssl@1.1) --with-libffi-dir=$(brew --prefix libffi) --enable-shared"
-          
-          # 安装指定Ruby版本
-          if ! rbenv install $RUBY_VERSION; then
-            echo "❌ Ruby安装失败，尝试清除缓存后重试..."
-            rm -rf ~/.rbenv/versions/$RUBY_VERSION
-            rbenv install $RUBY_VERSION || { echo "❌ Ruby安装最终失败"; exit 1; }
-          fi
-          
-          rbenv global $RUBY_VERSION
-          echo "💎 Ruby $RUBY_VERSION 安装成功"
 
-      # ================= Cocoapods配置 =================
-      - name: Install Cocoapods
-        script: |
-          # 配置Gem环境
-          export GEM_HOME="$HOME/.gem"
-          export PATH="$GEM_HOME/bin:$PATH"
+          # 安装最新ruby-build插件
+          mkdir -p ~/.rbenv/plugins
+          rm -rf ~/.rbenv/plugins/ruby-build
+          git clone https://github.com/rbenv/ruby-build.git ~/.rbenv/plugins/ruby-build --depth 1
+
+          # 编译参数配置
+          export RUBY_CONFIGURE_OPTS="\
+            --with-openssl-dir=$HOMEBREW_PREFIX/opt/openssl@3 \
+            --with-libffi-dir=$HOMEBREW_PREFIX/opt/libffi \
+            --enable-shared \
+            --disable-install-doc"
+
+          # 安装Ruby（带调试日志）
+          rbenv install $RUBY_VERSION -v 2>&1 | tee ruby_build.log
           
-          # 安装指定版本Cocoapods
-          gem install cocoapods -v $COCOAPODS_VERSION -- \
-            --with-ldflags="-L/opt/homebrew/opt/libffi/lib" \
-            --with-cppflags="-I/opt/homebrew/opt/libffi/include" \
-            --no-document
-          
-          # 验证安装
-          if ! pod --version | grep -q $COCOAPODS_VERSION; then
-            echo "❌ Cocoapods版本不匹配"
+          # 错误分析
+          if [ $? -ne 0 ]; then
+            echo "❌ Ruby安装失败，关键错误信息："
+            grep -iE 'error:|undefined symbol|_rb_' ruby_build.log | grep -vE 'doc|locale|warning'
             exit 1
           fi
-          echo "📦 Cocoapods $COCOAPODS_VERSION 安装成功"
 
-      # ================= 项目构建阶段 =================
+          rbenv global $RUBY_VERSION
+          
+          # 验证环境
+          ruby -v
+          ruby -ropenssl -e "puts OpenSSL::OPENSSL_VERSION"
+
+      # ========== Cocoapods配置 ==========
+      - name: Setup Cocoapods
+        script: |
+          # 独立Gem环境
+          export GEM_HOME="$HOME/.gem"
+          export GEM_PATH="$GEM_HOME"
+          export PATH="$GEM_HOME/bin:$PATH"
+          echo "export PATH='$GEM_HOME/bin:$PATH'" >> ~/.zshrc
+          
+          # 安装Bundler
+          gem install bundler --no-document
+          
+          # 安装指定版本Cocoapods
+          gem install cocoapods -v $COCOAPODS_VERSION \
+            -- --with-ldflags="-L$HOMEBREW_PREFIX/opt/libffi/lib" \
+               --with-cppflags="-I$HOMEBREW_PREFIX/opt/libffi/include" \
+               --no-document
+          
+          # 验证安装
+          pod --version | grep $COCOAPODS_VERSION || exit 1
+
+      # ========== 项目构建阶段 ==========
       - name: Build iOS Project
         script: |
-          # 进入iOS目录
           cd ios
           
           # 安装项目依赖
-          pod install --repo-update || { echo "❌ Pod安装失败"; exit 1; }
-          
+          pod install --repo-update || { 
+            echo "❌ Pod安装失败，尝试清除缓存重试..."; 
+            rm -rf Pods Podfile.lock;
+            pod install --repo-update || exit 1;
+          }
+
           # 清理构建缓存
-          xcodebuild clean -workspace JuZi.xcworkspace -scheme JuZi
-          
-          # 归档项目
+          xcodebuild clean \
+            -workspace "$SCHEME_NAME.xcworkspace" \
+            -scheme "$SCHEME_NAME" \
+            -quiet
+
+          # 归档项目（带详细日志）
           xcodebuild archive \
-            -workspace JuZi.xcworkspace \
-            -scheme JuZi \
-            -archivePath $CM_BUILD_DIR/build/JuZi.xcarchive \
-            -destination 'generic/platform=iOS' \
+            -workspace "$SCHEME_NAME.xcworkspace" \
+            -scheme "$SCHEME_NAME" \
+            -archivePath "$CM_BUILD_DIR/build/$SCHEME_NAME.xcarchive" \
+            -destination "generic/platform=iOS" \
             CODE_SIGN_STYLE="Manual" \
             PROVISIONING_PROFILE_SPECIFIER="$IOS_PROVISIONING_PROFILE" \
             DEVELOPMENT_TEAM="$IOS_DEVELOPMENT_TEAM" \
             PRODUCT_BUNDLE_IDENTIFIER="$APP_ID" \
             | xcpretty
-          
+
           # 导出IPA
           xcodebuild -exportArchive \
-            -archivePath $CM_BUILD_DIR/build/JuZi.xcarchive \
-            -exportOptionsPlist ExportOptions.plist \
-            -exportPath $CM_BUILD_DIR/build/artifacts \
+            -archivePath "$CM_BUILD_DIR/build/$SCHEME_NAME.xcarchive" \
+            -exportOptionsPlist "ExportOptions.plist" \
+            -exportPath "$CM_BUILD_DIR/build/artifacts" \
             | xcpretty
-          
-          echo "📱 构建成功！IPA文件路径: $CM_BUILD_DIR/build/artifacts"
 
-      # ================= 后续处理阶段 =================
-      - name: Post-build Checks
+      # ========== 构建验证阶段 ==========
+      - name: Verify Build
         script: |
-          # 验证产物存在性
-          if [ ! -f "$CM_BUILD_DIR/build/artifacts/JuZi.ipa" ]; then
+          # 检查产物存在性
+          if [ ! -f "$CM_BUILD_DIR/build/artifacts/$SCHEME_NAME.ipa" ]; then
             echo "❌ IPA文件未生成"
             exit 1
           fi
-          
-          # 获取版本信息
-          /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" ios/JuZi/Info.plist
-          echo "✅ 所有检查通过"
+
+          # 检查签名状态
+          codesign -dv --verbose=4 "$CM_BUILD_DIR/build/artifacts/$SCHEME_NAME.ipa" || exit 1
 
     artifacts:
       - build/artifacts/**/*.ipa
+    caching:
+      paths:
+        - ~/.rbenv
+        - ~/.gem
+        - ios/Pods
     publishing:
       email:
         recipients:
           - dev-team@yourcompany.com
+
+# ========== 使用说明 ==========
+# 1. 需提前准备：
+#    - Codemagic后台配置包含以下变量的环境组：
+#      * IOS_PROVISIONING_PROFILE: 描述文件名称
+#      * IOS_DEVELOPMENT_TEAM: 开发者团队ID
+#    - 项目根目录需包含正确的ExportOptions.plist文件
+
+# 2. 推荐配置缓存路径：
+#    - ~/.rbenv
+#    - ~/.gem
+#    - ios/Pods
+
+# 3. 适配检查点：
+#    - 确认Scheme名称与Xcode工程一致
+#    - 检查ExportOptions.plist签名配置
+#    - 验证Ruby版本与Cocoapods兼容性
